@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# decode using big LM with 15 keywords (positive data only)
+#
+# Zhenhao Ge, 2019-02-22
 
 . ./cmd.sh
 . ./path.sh
