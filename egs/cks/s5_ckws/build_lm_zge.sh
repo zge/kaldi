@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# jaekwon.yoo@sony.com
+if [ $# \< 1 ]; then
+  echo "Usage: build_lm_zge.sh <stage>"
+  echo "e.g. build_lm_zge.sh -2"
+  exit 1
+fi
 
 . ./cmd.sh
 . ./path.sh
@@ -11,8 +15,8 @@ echo "stage: $stage"
 DATA=data
 
 # check 1: general vocab size
-#VOCAB=50k # limit is 47810 from local/lm/word.counts
-VOCAB=2k
+VOCAB=50k # limit is 47810 from local/lm/word.counts
+#VOCAB=2k
 #VOCAB=100
 VOCABSIZE=`echo $VOCAB | sed -e 's/k$/000/g'`
 #VOCABSIZE=100
@@ -21,7 +25,15 @@ lmtool=srilm
 order_lm=1
 tgmin=${order_lm}gram-mincount
 
-IDX=002
+IDX=003 # 001: #rep=500; 002: #rep=5000, 003: $rep=100
+if [ $IDX == 001 ]; then
+  rep_factor=500
+elif [ $IDX == 002 ]; then
+  rep_factor=5000
+elif [ $IDX == 003 ]; then
+  rep_factor=100
+fi
+echo "rep factor: $rep_factor"
 
 EXP=exp
 EXT=ext${IDX}.$VOCAB
@@ -80,7 +92,9 @@ if [[ $stage -le -1 ]]; then
     cp ${GNRL_UNK_TXT} ${GNRL_TXT}
 
     # check 3: modify weights of keywords in LM by changing the num of repititions
-    for i in {1..5000}; do cat ${DATA}/local/lm/text_ckws.txt >> ${GNRL_TXT}; done
+    for i in $(seq 1 $rep_factor); do
+      cat ${DATA}/local/lm/text_ckws.txt >> ${GNRL_TXT};
+    done
 
     GNRL_LM=$dir/general/$tgmin/lm_unpruned.gz
     #GNRL_LM=${DATA}/local/lm/general/$tgmin/lm_unpruned.gz

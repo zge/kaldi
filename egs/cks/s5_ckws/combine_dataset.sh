@@ -4,8 +4,9 @@
 #
 # Zhenhao Ge, 2019-02-27
 
-dexp="exp04"
+dexp="exp05"
 dir="${HOME}/Work/Projects/ckws-kaldi/datasets/${dexp}"
+idx=$1
 
 # case 1 (combine left/right/both to positive)
 #tag="rand_1000_a_utterance_1000"
@@ -15,9 +16,11 @@ dir="${HOME}/Work/Projects/ckws-kaldi/datasets/${dexp}"
 #dest_dir=${dir}/positive_${tag2}
 
 # case 2 (combine left/right/both and negative to all)
-pos_dirs=$(ls -d ${dir}/{left,right,both}_rand_1000_a_100)
-neg_dir=${dir}/negative_rand_3000_a_300
-dest_dir=${dir}/all_rand_6000_a_600
+nkws=5
+set_tag=set${idx} # set{1..5}
+pos_dirs=$(ls -d ${dir}/{left,right,both}_rand_1000_a_1000_kw${nkws}_${set_tag})
+neg_dir=${dir}/negative_rand_3000_a_3000
+dest_dir=${dir}/all_rand_6000_a_6000_kw${nkws}_${set_tag}
 
 # combine datasets
 if [ ! -z "${src_dirs}" ]; then

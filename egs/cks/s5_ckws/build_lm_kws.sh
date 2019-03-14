@@ -2,30 +2,41 @@
 
 # Zhenhao Ge, 2019-02-28
 
+if [ $# \< 1 ]; then
+  echo "Usage: build_lm_kws.sh <stage> <vocab-size> <rep-factor> <kwfile>"
+  echo "e.g. build_lm_kws.sh -2 50k 500 keywords_set1.txt"
+  exit 1
+fi
+
 . ./cmd.sh
 . ./path.sh
 
 stage=$1
-echo "stage: $stage"
-
-DATA=data
 
 # check 1: general vocab size
-#VOCAB=50k # limit is 47810 from local/lm/word.counts
-VOCAB=2k
-#VOCAB=100
+VOCAB=$2 # limit is 47810 from local/lm/word.counts
 VOCABSIZE=`echo $VOCAB | sed -e 's/k$/000/g'`
-#VOCABSIZE=100
+rep_factor=$3
+kwfile=data/local/lm/kwlists/${4:-"keyword_all.txt"}
+kwset=$(echo $kwfile | awk -F '[_.]' '{print $2}' | sed 's/set//g')
+kwseq=$(cut -d':' -f1 $kwfile | paste -sd-)
+kws=$(cat $kwfile | awk '{print $2}')
+EXT=v${VOCAB}-w${rep_factor}-s${kwset}
+
+echo "stage: $stage"
+echo "vocab-size: ${VOCABSIZE}"
+echo "rep factor: ${rep_factor}"
+echo "keyword file: ${kwfile}"
+echo "selected keyword: $(echo ${kws} | tr '\n' ' ')"
+echo "selected keyword sequence: ${kwseq}"
+echo "LM extension: ${EXT}"
 
 lmtool=srilm
 order_lm=1
 tgmin=${order_lm}gram-mincount
-
-IDX=002
-
 EXP=exp
-EXT=ext${IDX}.$VOCAB
 
+DATA=data
 general=general_fisher_swbd_spsp_cnsl # what is 'spsp' and 'cnsl' stand for?
 GNRL_TXT=${DATA}/local/lm/${general}.train.txt
 DEV_TXT=${DATA}/local/lm/${general}.dev.txt
@@ -36,16 +47,18 @@ echo "start stages ..."
 
 if [[ $stage -le -2 ]]; then
     dir=${DATA}/local/dict_${EXT}
-    echo "dir=$dir"
+    echo "dir = $dir"
     PROC_TXT=${GNRL_TXT}
 
     # Initial Preparation
     [ -d $dir ] && rm -rf $dir
     mkdir -p $dir
+    # copy 4 files from ${DATA}/local/dict to ${dir}
     for f in lexicon.txt silence_phones.txt optional_silence.txt nonsilence_phones.txt; do
-        [ ! -f ${DATA}/local/dict/$f ] && echo "$0: no such file $f" && exit 1;
+        [ ! -f ${DATA}/local/dict/$f ] && echo "$0: no such file $f";
         cp ${DATA}/local/dict/$f ${dir}/$f
     done
+    # backup $dir/lexicon.txt
     cp $dir/lexicon.txt $dir/lexicon.org.txt
 
     # hifreq_words 
@@ -62,6 +75,7 @@ if [[ $stage -le -2 ]]; then
     cat $dir/lexicon_hfw.txt ${DATA}/local/lm/lexicon_ckws.txt | sort | uniq > $dir/lexicon.txt
 
     # Generating L.fst
+    # utils/pssr_lang.sh <dict-src-dir> <oov-dict-entry> <tmp-dir> <lang-dir>
     utils/pssr_lang.sh ${DATA}/local/dict_${EXT} "<unk>" ${DATA}/local/lang_${EXT} ${DATA}/lang_${EXT}
 fi
 
@@ -79,8 +93,25 @@ if [[ $stage -le -1 ]]; then
     GNRL_TXT=$dir/general_ckws.txt
     cp ${GNRL_UNK_TXT} ${GNRL_TXT}
 
+    # kw_base=${DATA}/local/lm/text_ckws.txt # original one containing 15 keywords
+    # generate the base kwlist (10X10X8X8=6400 per keyword) for the selected keywords
+    kw_base=${DATA}/local/lm/kw_base_set${kwset}.txt
+    [ -f ${kw_base} ] && rm ${kw_base} && echo "removed old ${kw_base}"
+    for i in {1..10}; do echo $kws | tr ' ' '\n' >> tmp.a.txt; done
+    for i in {1..10}; do cat tmp.a.txt >> tmp.b.txt; done
+    for i in {1..8}; do cat tmp.b.txt >> tmp.c.txt; done
+    for i in {1..8}; do cat tmp.c.txt >> ${kw_base}; done
+    rm tmp.{a,b,c}.txt
+    echo "there are $(cat ${kw_base} | wc -l) in ${kw_base}"
+
     # check 3: modify weights of keywords in LM by changing the num of repititions
-    for i in {1..5000}; do cat ${DATA}/local/lm/text_ckws.txt >> ${GNRL_TXT}; done
+    rep_factor2=$((rep_factor / 100))
+    for i in {1..100}; do cat ${kw_base} >> tmp.a.txt; done
+    for i in $(seq 1 $rep_factor2); do
+      cat tmp.a.txt >> ${GNRL_TXT}
+    done
+    rm tmp.a.txt
+    echo "concatenating ${kw_base} 100X${rep_factor2} times into ${GNRL_TXT}"
 
     GNRL_LM=$dir/general/$tgmin/lm_unpruned.gz
     #GNRL_LM=${DATA}/local/lm/general/$tgmin/lm_unpruned.gz
